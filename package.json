@@ -1,0 +1,12 @@
+{
+  "name": "study-track",
+  "version": "1.0.0",
+  "description": "Academic assignment & workspace management website - Study Track",
+  "main": "index.html",
+  "scripts": {
+    "dev": "npx serve ."
+  },
+  "keywords": ["study-track", "assignment-manager", "academic-workspace"],
+  "author": "Scholar Team",
+  "license": "MIT"
+}

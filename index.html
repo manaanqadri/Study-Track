@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Study Track | Academic Assignment & Workspace Management</title>
+  <meta name="description"
+    content="Study Track - Your complete academic assignment and workspace management platform. Stay organized, track deadlines, and monitor your GPA.">
+  <!-- Google Fonts: Inter font family matching Figma -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- Modal Container for Task CRUD and Dialogs -->
+  <div id="modal-backdrop" class="modal-backdrop hidden">
+    <div id="modal-content" class="modal-box"></div>
+  </div>
+
+  <!-- Root Application Container -->
+  <div id="app" class="app-root">
+    <!-- Content rendered dynamically by app.js based on route -->
+  </div>
+
+  <!-- Application Logic Modules -->
+  <script src="auth.js"></script>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>
