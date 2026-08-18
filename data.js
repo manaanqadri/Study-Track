@@ -98,7 +98,7 @@
         const stored = localStorage.getItem(key);
         if (stored !== null) return JSON.parse(stored);
         
-        const initialTasks = [];
+        const initialTasks = defaultInitialTasks;
         localStorage.setItem(key, JSON.stringify(initialTasks));
         return initialTasks;
       } catch (e) {
