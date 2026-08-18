@@ -94,13 +94,16 @@
 
   // Guard protected routes
   function router() {
+    const rawHash = window.location.hash.replace('#', '');
     const route = getRoute();
     const isAuth = AuthEngine.isAuthenticated();
 
     const publicRoutes = ['login', 'register', 'forgot-password'];
 
     if (!isAuth && !publicRoutes.includes(route)) {
-      showToast('Please log in to access your workspace.', 'info');
+      if (rawHash && rawHash !== '/' && rawHash !== 'dashboard') {
+        showToast('Please log in to access your workspace.', 'info');
+      }
       navigateTo('login');
       return;
     }
@@ -186,13 +189,13 @@
           <form id="login-form">
             <div class="form-group">
               <label class="form-label" for="login-email">University / Personal Email *</label>
-              <input type="email" id="login-email" class="form-input" placeholder="student@university.edu" required value="student@university.edu">
+              <input type="email" id="login-email" class="form-input" placeholder="student@university.edu" required>
             </div>
 
             <div class="form-group">
               <label class="form-label" for="login-password">Password *</label>
               <div class="input-wrapper">
-                <input type="password" id="login-password" class="form-input" placeholder="••••••••" required value="password123">
+                <input type="password" id="login-password" class="form-input" placeholder="••••••••" required>
                 <button type="button" id="toggle-password-btn" class="input-icon-btn" aria-label="Toggle password visibility">
                   ${Icons.eye}
                 </button>
@@ -236,11 +239,92 @@
       togglePasswordBtn.innerHTML = showPassword ? Icons.eyeOff : Icons.eye;
     });
 
-    // Google Login Demo Flow
+    // Google Login OAuth Account Selector Flow
     document.getElementById('btn-google-login').addEventListener('click', () => {
-      AuthEngine.demoGoogleLogin();
-      showToast('Signed in with Google successfully!', 'success');
-      navigateTo('dashboard');
+      // Fetch any previously signed-in Google accounts on this device
+      let existingUsers = [];
+      try {
+        const stored = JSON.parse(localStorage.getItem('studytrack_users')) || [];
+        existingUsers = stored.filter(u => u.isGoogleUser || (u.id && u.id.startsWith('google_user_')));
+      } catch (e) {
+        existingUsers = [];
+      }
+
+      const savedAccountsHTML = existingUsers.length > 0 ? `
+        <div style="margin-bottom: 12px; font-weight: 700; font-size: 0.85rem; color: var(--text-muted);">
+          SELECT SAVED GOOGLE ACCOUNT
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
+          ${existingUsers.map(acc => `
+            <button type="button" class="btn-sidebar-outline google-acc-btn" data-name="${acc.name.replace(/"/g, '&quot;')}" data-email="${acc.email.replace(/"/g, '&quot;')}" style="text-align: left; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <div style="font-weight: 700; font-size: 0.9rem; color: var(--text-main);">${acc.name}</div>
+                <div style="font-size: 0.8rem; color: var(--text-muted);">${acc.email}</div>
+              </div>
+              <span style="font-size: 0.8rem; font-weight: 700; color: var(--primary-blue);">Select →</span>
+            </button>
+          `).join('')}
+        </div>
+        <div class="auth-divider" style="margin: 16px 0;">
+          <span>OR ENTER GOOGLE ACCOUNT</span>
+        </div>
+      ` : '';
+
+      openModal(`
+        <div style="margin-bottom: 18px; text-align: center;">
+          <div style="font-size: 2.2rem; margin-bottom: 6px;">🌐</div>
+          <h2 style="font-size: 1.25rem; font-weight: 800;">Sign in with Google</h2>
+          <p style="color: var(--text-muted); font-size: 0.88rem;">Authenticate with your Google account to enter Study Track.</p>
+        </div>
+
+        ${savedAccountsHTML}
+
+        <form id="google-custom-form">
+          <div class="form-group">
+            <label class="form-label">Full Name *</label>
+            <input type="text" id="google-name-input" class="form-input" placeholder="e.g. User A" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Google Email *</label>
+            <input type="email" id="google-email-input" class="form-input" placeholder="user@gmail.com" required>
+          </div>
+          <div style="display: flex; gap: 10px; margin-top: 18px;">
+            <button type="button" id="btn-cancel-google-modal" class="btn-sidebar-outline" style="flex: 1;">Cancel</button>
+            <button type="submit" class="btn-primary" style="flex: 1;">Continue</button>
+          </div>
+        </form>
+      `);
+
+      document.getElementById('btn-cancel-google-modal').addEventListener('click', closeModal);
+
+      document.querySelectorAll('.google-acc-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const name = btn.getAttribute('data-name');
+          const email = btn.getAttribute('data-email');
+          const res = AuthEngine.demoGoogleLogin(name, email);
+          if (res.success) {
+            closeModal();
+            showToast(`Signed in as ${res.user.name}`, 'success');
+            navigateTo('dashboard');
+          } else {
+            showToast(res.message, 'error');
+          }
+        });
+      });
+
+      document.getElementById('google-custom-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const name = document.getElementById('google-name-input').value;
+        const email = document.getElementById('google-email-input').value;
+        const res = AuthEngine.demoGoogleLogin(name, email);
+        if (res.success) {
+          closeModal();
+          showToast(`Signed in as ${res.user.name}`, 'success');
+          navigateTo('dashboard');
+        } else {
+          showToast(res.message, 'error');
+        }
+      });
     });
 
     // Form Submission Handler
@@ -278,7 +362,7 @@
           <form id="register-form">
             <div class="form-group">
               <label class="form-label" for="reg-name">Full Name *</label>
-              <input type="text" id="reg-name" class="form-input" placeholder="e.g. Manaan Qadri" required>
+              <input type="text" id="reg-name" class="form-input" placeholder="e.g. Jane Doe" required>
             </div>
 
             <div class="form-group">
@@ -383,7 +467,11 @@
   // 4. WORKSPACE SHELL (HEADER, SIDEBAR, MOBILE BAR)
   // ========================================================
   function renderWorkspaceShell(activeRoute) {
-    const user = AuthEngine.getCurrentUser() || { name: 'Manaan Qadri' };
+    const user = AuthEngine.getCurrentUser();
+    if (!user) {
+      navigateTo('login');
+      return;
+    }
     const stats = DataManager.getStatsSummary();
     const notifications = DataManager.getNotifications();
     const unreadCount = DataManager.getUnreadNotificationCount();
@@ -513,9 +601,9 @@
               <!-- User Profile Avatar Badge -->
               <a href="#profile" id="user-menu-btn" class="user-profile-badge" style="text-decoration: none;">
                 <div class="avatar-circle">
-                  ${user.avatar ? `<img src="${user.avatar}" class="avatar-img" alt="${user.name}">` : user.name.charAt(0)}
+                  ${user.avatar ? `<img src="${user.avatar}" class="avatar-img" alt="${user.name}">` : (user.name ? user.name.charAt(0).toUpperCase() : '?')}
                 </div>
-                <span class="user-name-text">${user.name}</span>
+                <span class="user-name-text">${user.name || 'User'}</span>
               </a>
 
               <button id="btn-logout" class="icon-btn" title="Logout">
@@ -633,16 +721,26 @@
   // 5. DASHBOARD VIEW RENDERER
   // ========================================================
   function renderDashboardView(container) {
-    const user = AuthEngine.getCurrentUser() || { name: 'Manaan' };
-    const firstName = user.name.split(' ')[0];
+    const user = AuthEngine.getCurrentUser();
+    const userName = (user && user.name) ? user.name.trim() : 'Student';
     const stats = DataManager.getStatsSummary();
     const tasks = DataManager.getTasks();
+
+    const currentHour = new Date().getHours();
+    let greetingPrefix = 'Good Evening';
+    if (currentHour >= 5 && currentHour < 12) {
+      greetingPrefix = 'Good Morning';
+    } else if (currentHour >= 12 && currentHour < 17) {
+      greetingPrefix = 'Good Afternoon';
+    }
+
+    const greetingText = `${greetingPrefix}, ${userName}!`;
 
     container.innerHTML = `
       <!-- Greeting Banner -->
       <div class="hero-banner">
         <div class="hero-text">
-          <h1>Good afternoon, ${firstName}! 🖐</h1>
+          <h1>${greetingText} 👋</h1>
           <p>Stay focused and keep learning.</p>
         </div>
         <div class="hero-illustration">📚🌱</div>
@@ -816,6 +914,9 @@
               <span class="badge ${task.completed ? 'completed' : task.status === 'overdue' ? 'overdue' : 'assignment'}">
                 ${task.completed ? 'Completed' : task.type}
               </span>
+              <button class="icon-btn edit edit-task-btn" title="Edit Task">
+                ✏️
+              </button>
               <button class="icon-btn delete delete-task-btn" title="Delete Task">
                 🗑️
               </button>
@@ -853,6 +954,18 @@
       });
     });
 
+    // Edit Task buttons
+    container.querySelectorAll('.edit-task-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const taskId = e.target.closest('.task-row').getAttribute('data-id');
+        const tasks = DataManager.getTasks();
+        const task = tasks.find(t => t.id === taskId);
+        if (task) {
+          openEditTaskModal(task);
+        }
+      });
+    });
+
     // Delete Task buttons
     container.querySelectorAll('.delete-task-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -861,6 +974,71 @@
         showToast('Task deleted.', 'info');
         renderTasksView(container);
       });
+    });
+  }
+
+  // Edit Task Modal Dialog
+  function openEditTaskModal(task) {
+    openModal(`
+      <div style="margin-bottom: 20px;">
+        <h2 style="font-size: 1.25rem; font-weight: 800;">Edit Assignment</h2>
+        <p style="color: var(--text-muted); font-size: 0.88rem;">Update details for your task.</p>
+      </div>
+
+      <form id="edit-task-form">
+        <div class="form-group">
+          <label class="form-label">Task Title *</label>
+          <input type="text" id="edit-task-title" class="form-input" value="${task.title}" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Subject / Category</label>
+          <select id="edit-task-subject" class="form-input">
+            <option value="Computer Science" ${task.subject === 'Computer Science' ? 'selected' : ''}>Computer Science</option>
+            <option value="Mathematics" ${task.subject === 'Mathematics' ? 'selected' : ''}>Mathematics</option>
+            <option value="Physics" ${task.subject === 'Physics' ? 'selected' : ''}>Physics</option>
+            <option value="Data Structures" ${task.subject === 'Data Structures' ? 'selected' : ''}>Data Structures</option>
+            <option value="General" ${task.subject === 'General' ? 'selected' : ''}>General</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Task Type</label>
+          <select id="edit-task-type" class="form-input">
+            <option value="Assignment" ${task.type === 'Assignment' ? 'selected' : ''}>Assignment</option>
+            <option value="Quiz" ${task.type === 'Quiz' ? 'selected' : ''}>Quiz</option>
+            <option value="Lab Report" ${task.type === 'Lab Report' ? 'selected' : ''}>Lab Report</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Due Date *</label>
+          <input type="date" id="edit-task-date" class="form-input" required value="${task.dueDate}">
+        </div>
+
+        <div style="display: flex; gap: 12px; margin-top: 24px;">
+          <button type="button" id="btn-cancel-edit-modal" class="btn-sidebar-outline" style="flex: 1;">Cancel</button>
+          <button type="submit" class="btn-primary" style="flex: 1;">Update Task</button>
+        </div>
+      </form>
+    `);
+
+    document.getElementById('btn-cancel-edit-modal').addEventListener('click', closeModal);
+
+    document.getElementById('edit-task-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const title = document.getElementById('edit-task-title').value;
+      const subject = document.getElementById('edit-task-subject').value;
+      const type = document.getElementById('edit-task-type').value;
+      const dueDate = document.getElementById('edit-task-date').value;
+
+      DataManager.updateTask(task.id, { title, subject, type, dueDate });
+      showToast('Assignment updated!', 'success');
+      closeModal();
+
+      if (getRoute() === 'tasks') {
+        renderTasksView(document.getElementById('content-body'));
+      }
     });
   }
 
@@ -887,6 +1065,7 @@
             <option value="Mathematics">Mathematics</option>
             <option value="Physics">Physics</option>
             <option value="Data Structures">Data Structures</option>
+            <option value="General">General</option>
           </select>
         </div>
 
@@ -1007,16 +1186,16 @@
             ${dayLabels.map(d => `<div class="cal-day-label">${d}</div>`).join('')}
             ${Array.from({ length: firstDayOffset }, () => `<div class="cal-date-cell empty" style="visibility: hidden; pointer-events: none;"></div>`).join('')}
             ${Array.from({ length: totalDays }, (_, i) => i + 1).map(day => {
-              const isToday = (currentCalendarYear === todayYear && currentCalendarMonth === todayMonth && day === todayDate);
-              const isSelected = (day === selectedCalendarDay);
-              const hasTask = taskDatesInMonth.has(day);
-              return `
+      const isToday = (currentCalendarYear === todayYear && currentCalendarMonth === todayMonth && day === todayDate);
+      const isSelected = (day === selectedCalendarDay);
+      const hasTask = taskDatesInMonth.has(day);
+      return `
                 <div class="cal-date-cell ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}" data-day="${day}">
                   ${day}
                   ${hasTask ? '<div class="cal-dot"></div>' : ''}
                 </div>
               `;
-            }).join('')}
+    }).join('')}
           </div>
         </div>
 
@@ -1121,7 +1300,13 @@
   // 9. PROFILE VIEW RENDERER WITH PHOTO UPLOAD & REMOVE
   // ========================================================
   function renderProfileView(container) {
-    const user = AuthEngine.getCurrentUser() || { name: 'Manaan Qadri', email: 'student@university.edu', major: 'Computer Science' };
+    const user = AuthEngine.getCurrentUser();
+    if (!user) return;
+
+    const userCourse = user.course || user.major || 'Not specified';
+    const userUniv = user.university || 'Not specified';
+    const userSemester = user.semester || 'Not specified';
+    const userStudentId = user.studentId || ('STU-' + (user.id ? user.id.replace(/\D/g, '').slice(-5) : '10001'));
 
     container.innerHTML = `
       <div class="profile-card">
@@ -1129,7 +1314,7 @@
         <div class="profile-body">
           <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: -48px; margin-bottom: 16px;">
             <div class="profile-avatar-large">
-              ${user.avatar ? `<img src="${user.avatar}" class="profile-avatar-img" alt="${user.name}">` : user.name.charAt(0)}
+              ${user.avatar ? `<img src="${user.avatar}" class="profile-avatar-img" alt="${user.name}">` : user.name.charAt(0).toUpperCase()}
             </div>
 
             <!-- Avatar Action Buttons -->
@@ -1149,7 +1334,7 @@
           <div style="display: flex; align-items: center; justify-content: space-between;">
             <div>
               <h2 style="font-size: 1.5rem; font-weight: 800;">${user.name}</h2>
-              <p style="color: var(--text-muted); font-size: 0.95rem;">${user.major || 'Computer Science Student'}</p>
+              <p style="color: var(--text-muted); font-size: 0.95rem;">${userCourse}</p>
             </div>
             <button id="btn-edit-profile" class="btn-sidebar-outline">Edit Profile</button>
           </div>
@@ -1157,18 +1342,20 @@
           <div class="profile-stats-row">
             <div class="profile-stat-box">
               <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">CURRENT GPA</div>
-              <div style="font-size: 1.75rem; font-weight: 800; color: var(--primary-blue); margin-top: 4px;">${user.gpa || '3.8'}</div>
+              <div style="font-size: 1.75rem; font-weight: 800; color: var(--primary-blue); margin-top: 4px;">${user.gpa || '0.0'}</div>
             </div>
             <div class="profile-stat-box">
               <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">TOTAL CREDITS</div>
-              <div style="font-size: 1.75rem; font-weight: 800; color: var(--text-main); margin-top: 4px;">${user.credits || '42'}</div>
+              <div style="font-size: 1.75rem; font-weight: 800; color: var(--text-main); margin-top: 4px;">${user.credits || '0'}</div>
             </div>
           </div>
 
           <div style="border-top: 1px solid var(--border-color); padding-top: 20px; font-size: 0.9rem;">
             <div style="margin-bottom: 10px;"><strong>Email:</strong> ${user.email}</div>
-            <div style="margin-bottom: 10px;"><strong>University:</strong> ${user.university || 'State University'}</div>
-            <div><strong>Student ID:</strong> STU-94021</div>
+            <div style="margin-bottom: 10px;"><strong>University:</strong> ${userUniv}</div>
+            <div style="margin-bottom: 10px;"><strong>Course / Program:</strong> ${userCourse}</div>
+            <div style="margin-bottom: 10px;"><strong>Semester:</strong> ${userSemester}</div>
+            <div><strong>Student ID:</strong> ${userStudentId}</div>
           </div>
         </div>
       </div>
@@ -1209,12 +1396,20 @@
         <h2 style="font-size: 1.2rem; font-weight: 800; margin-bottom: 16px;">Edit Profile Information</h2>
         <form id="edit-profile-form">
           <div class="form-group">
-            <label class="form-label">Full Name</label>
+            <label class="form-label">Full Name *</label>
             <input type="text" id="edit-name" class="form-input" value="${user.name}" required>
           </div>
           <div class="form-group">
-            <label class="form-label">Major</label>
-            <input type="text" id="edit-major" class="form-input" value="${user.major || 'Computer Science'}">
+            <label class="form-label">University *</label>
+            <input type="text" id="edit-university" class="form-input" value="${user.university || ''}" placeholder="e.g. Stanford University" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Course / Program *</label>
+            <input type="text" id="edit-course" class="form-input" value="${user.course || user.major || ''}" placeholder="e.g. Computer Science" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Semester *</label>
+            <input type="text" id="edit-semester" class="form-input" value="${user.semester || ''}" placeholder="e.g. 1st Semester" required>
           </div>
           <div style="display: flex; gap: 12px; margin-top: 20px;">
             <button type="button" id="btn-close-prof-modal" class="btn-sidebar-outline" style="flex:1;">Cancel</button>
@@ -1226,9 +1421,17 @@
       document.getElementById('btn-close-prof-modal').addEventListener('click', closeModal);
       document.getElementById('edit-profile-form').addEventListener('submit', (e) => {
         e.preventDefault();
+        const name = document.getElementById('edit-name').value;
+        const university = document.getElementById('edit-university').value;
+        const course = document.getElementById('edit-course').value;
+        const semester = document.getElementById('edit-semester').value;
+
         AuthEngine.updateProfile({
-          name: document.getElementById('edit-name').value,
-          major: document.getElementById('edit-major').value
+          name,
+          university,
+          course,
+          major: course,
+          semester
         });
         showToast('Profile updated!', 'success');
         closeModal();

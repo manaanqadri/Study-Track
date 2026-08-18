@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "npx serve ."
   },
-  "keywords": ["study-track", "assignment-manager", "academic-workspace"],
+  "keywords": [
+    "study-track",
+    "assignment-manager",
+    "academic-workspace"
+  ],
   "author": "Scholar Team",
   "license": "MIT"
 }

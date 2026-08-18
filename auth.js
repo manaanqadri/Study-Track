@@ -2,35 +2,14 @@
  * ========================================================
  * STUDY TRACK - MODULAR AUTHENTICATION ENGINE
  * ========================================================
- * Handles local user registry, session storage, protected
- * route guards, demo OAuth flows, and password recovery.
+ * Handles local user registry, user-specific profiles,
+ * session storage, protected route guards, demo OAuth flows,
+ * and password recovery.
  */
 
 (function () {
   const USERS_STORAGE_KEY = 'studytrack_users';
   const SESSION_STORAGE_KEY = 'studytrack_session';
-
-  // Seed default demo user if missing
-  function initializeDefaultUsers() {
-    const existing = localStorage.getItem(USERS_STORAGE_KEY);
-    if (!existing) {
-      const defaultUsers = [
-        {
-          id: 'user-1',
-          name: 'Manaan Qadri',
-          email: 'student@university.edu',
-          password: 'password123',
-          major: 'Computer Science',
-          university: 'State University',
-          gpa: '3.8',
-          credits: '42'
-        }
-      ];
-      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(defaultUsers));
-    }
-  }
-
-  initializeDefaultUsers();
 
   function getUsers() {
     try {
@@ -51,12 +30,20 @@
       return !!session;
     },
 
-    // Retrieve active logged in user profile
+    // Retrieve active logged-in user profile dynamically from registry
     getCurrentUser() {
       const sessionStr = localStorage.getItem(SESSION_STORAGE_KEY) || sessionStorage.getItem(SESSION_STORAGE_KEY);
       if (!sessionStr) return null;
       try {
-        return JSON.parse(sessionStr);
+        const sessionUser = JSON.parse(sessionStr);
+        if (!sessionUser) return null;
+        const users = getUsers();
+        // Lookup latest fresh user profile by id or email
+        const freshUser = users.find(u =>
+          (sessionUser.id && u.id === sessionUser.id) ||
+          (sessionUser.email && u.email && u.email.toLowerCase() === sessionUser.email.toLowerCase())
+        );
+        return freshUser || sessionUser;
       } catch (e) {
         return null;
       }
@@ -66,10 +53,10 @@
     login(email, password, rememberMe = false) {
       const users = getUsers();
       const normalizedEmail = (email || '').trim().toLowerCase();
-      const user = users.find(u => u.email.toLowerCase() === normalizedEmail && u.password === password);
+      const user = users.find(u => u.email && u.email.toLowerCase() === normalizedEmail && u.password === password);
 
       if (!user) {
-        return { success: false, message: 'Invalid email or password. Try student@university.edu / password123' };
+        return { success: false, message: 'Invalid email or password. Please check your credentials or create an account.' };
       }
 
       const sessionData = JSON.stringify(user);
@@ -82,20 +69,39 @@
       return { success: true, user };
     },
 
-    // Demo Google OAuth sign-in flow
-    demoGoogleLogin() {
+    // Dynamic Google OAuth sign-in flow
+    demoGoogleLogin(providedName, providedEmail) {
       const users = getUsers();
-      let user = users.find(u => u.email === 'student@university.edu');
+      const normalizedEmail = (providedEmail || '').trim().toLowerCase();
+      if (!normalizedEmail) {
+        return { success: false, message: 'Please enter a valid Google email address.' };
+      }
+
+      const emailPrefix = normalizedEmail.split('@')[0];
+      const fallbackName = emailPrefix ? (emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1)) : 'Google User';
+      const displayName = (providedName || '').trim() || fallbackName;
+      const googleId = 'google_user_' + normalizedEmail.replace(/[^a-z0-9]/g, '_');
+
+      let user = users.find(u =>
+        (u.id === googleId) ||
+        (u.email && u.email.toLowerCase() === normalizedEmail)
+      );
+
       if (!user) {
         user = {
-          id: 'user-google-demo',
-          name: 'Manaan Qadri',
-          email: 'student@university.edu',
-          password: 'password123',
-          major: 'Computer Science',
-          university: 'State University',
-          gpa: '3.8',
-          credits: '42'
+          id: googleId,
+          name: displayName,
+          email: normalizedEmail,
+          password: 'google_oauth_session',
+          isGoogleUser: true,
+          course: '',
+          major: '',
+          university: '',
+          semester: '',
+          gpa: '0.0',
+          credits: '0',
+          studentId: 'STU-' + Math.floor(10000 + Math.random() * 90000),
+          avatar: null
         };
         users.push(user);
         saveUsers(users);
@@ -110,7 +116,7 @@
       const users = getUsers();
       const normalizedEmail = (email || '').trim().toLowerCase();
 
-      if (users.some(u => u.email.toLowerCase() === normalizedEmail)) {
+      if (users.some(u => u.email && u.email.toLowerCase() === normalizedEmail)) {
         return { success: false, message: 'An account with this email already exists.' };
       }
 
@@ -119,16 +125,20 @@
         name: name.trim(),
         email: normalizedEmail,
         password: password,
-        major: 'General Student',
-        university: 'University Workspace',
-        gpa: '4.0',
-        credits: '12'
+        course: '',
+        major: '',
+        university: '',
+        semester: '',
+        gpa: '0.0',
+        credits: '0',
+        studentId: 'STU-' + Math.floor(10000 + Math.random() * 90000),
+        avatar: null
       };
 
       users.push(newUser);
       saveUsers(users);
 
-      // Auto login
+      // Auto login after register
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(newUser));
 
       return { success: true, user: newUser };
@@ -138,9 +148,9 @@
     forgotPassword(email) {
       const users = getUsers();
       const normalizedEmail = (email || '').trim().toLowerCase();
-      const exists = users.some(u => u.email.toLowerCase() === normalizedEmail);
+      const exists = users.some(u => u.email && u.email.toLowerCase() === normalizedEmail);
 
-      if (!exists && normalizedEmail !== 'student@university.edu') {
+      if (!exists) {
         return { success: false, message: 'No account found with this email address.' };
       }
 
@@ -156,8 +166,11 @@
       if (!currentUser) return false;
 
       const users = getUsers();
-      const index = users.findIndex(u => u.id === currentUser.id);
-      
+      const index = users.findIndex(u =>
+        (currentUser.id && u.id === currentUser.id) ||
+        (currentUser.email && u.email && u.email.toLowerCase() === currentUser.email.toLowerCase())
+      );
+
       const updatedUser = { ...currentUser, ...updatedFields };
       if (index !== -1) {
         users[index] = updatedUser;
@@ -166,16 +179,24 @@
       }
       saveUsers(users);
 
+      const sessionData = JSON.stringify(updatedUser);
+      let sessionUpdated = false;
       if (localStorage.getItem(SESSION_STORAGE_KEY)) {
-        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(updatedUser));
-      } else {
-        sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(updatedUser));
+        localStorage.setItem(SESSION_STORAGE_KEY, sessionData);
+        sessionUpdated = true;
+      }
+      if (sessionStorage.getItem(SESSION_STORAGE_KEY)) {
+        sessionStorage.setItem(SESSION_STORAGE_KEY, sessionData);
+        sessionUpdated = true;
+      }
+      if (!sessionUpdated) {
+        localStorage.setItem(SESSION_STORAGE_KEY, sessionData);
       }
 
       return updatedUser;
     },
 
-    // Logout logic
+    // Logout logic: completely clear session keys from both localStorage and sessionStorage
     logout() {
       localStorage.removeItem(SESSION_STORAGE_KEY);
       sessionStorage.removeItem(SESSION_STORAGE_KEY);
@@ -185,3 +206,5 @@
 
   window.AuthEngine = AuthEngine;
 })();
+
+

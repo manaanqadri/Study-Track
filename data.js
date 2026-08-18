@@ -3,21 +3,39 @@
  * STUDY TRACK - DATA MANAGEMENT ENGINE
  * ========================================================
  * Manages assignments, subjects, calendar events, and
- * persistent storage via LocalStorage.
+ * persistent user-isolated storage via LocalStorage.
  */
 
 (function () {
-  const TASKS_KEY = 'studytrack_tasks';
-  const SETTINGS_KEY = 'studytrack_settings';
+  function getUserKey() {
+    if (window.AuthEngine && typeof window.AuthEngine.getCurrentUser === 'function') {
+      const user = window.AuthEngine.getCurrentUser();
+      if (user && user.id) return user.id;
+      if (user && user.email) return user.email.replace(/[^a-zA-Z0-9]/g, '_');
+    }
+    return 'anon_guest';
+  }
 
-  const defaultTasks = [
+  function getTasksStorageKey() {
+    return 'studytrack_tasks_' + getUserKey();
+  }
+
+  function getSettingsStorageKey() {
+    return 'studytrack_settings_' + getUserKey();
+  }
+
+  function getNotifsStorageKey() {
+    return 'studytrack_notifications_' + getUserKey();
+  }
+
+  const defaultInitialTasks = [
     {
       id: 'task-1',
       title: 'Data Structures Assignment',
       subject: 'Computer Science',
       type: 'Assignment',
       dueDate: '2026-08-16',
-      status: 'pending', // pending, completed, overdue
+      status: 'pending',
       completed: false,
       description: 'Implement binary search trees and heap sort in Java.'
     },
@@ -49,17 +67,7 @@
       dueDate: '2026-08-20',
       status: 'pending',
       completed: false,
-      description: 'Relational schema normalization and indexing.'
-    },
-    {
-      id: 'task-5',
-      title: 'Algorithm Analysis Paper',
-      subject: 'Computer Science',
-      type: 'Assignment',
-      dueDate: '2026-08-10',
-      status: 'completed',
-      completed: true,
-      description: 'Big-O complexity analysis writeup.'
+      description: 'SQL queries, normalization and ER diagrams.'
     }
   ];
 
@@ -78,40 +86,28 @@
     themeColor: '#0052cc'
   };
 
-  const NOTIFS_KEY = 'studytrack_notifications';
-
   const defaultNotifications = [
-    { id: 'notif-1', title: 'Data Structures Assignment', message: 'Deadline approaching in 24 hours.', time: '10 mins ago', read: false, type: 'warning' },
-    { id: 'notif-2', title: 'Math Quiz Scheduled', message: 'Upcoming quiz on Linear Algebra on Aug 18.', time: '1 hour ago', read: false, type: 'info' },
-    { id: 'notif-3', title: 'Project Lab Report', message: 'Task marked as completed.', time: '2 hours ago', read: true, type: 'success' },
-    { id: 'notif-4', title: 'New Course Announcement', message: 'Prof. Turing posted lecture notes for CS-301.', time: 'Yesterday', read: false, type: 'info' }
+    { id: 'notif-1', title: 'Assignment Reminder', message: 'Upcoming deadlines in your workspace.', time: '10 mins ago', read: false, type: 'info' },
+    { id: 'notif-2', title: 'Welcome to Study Track', message: 'Your personalized academic account is ready.', time: '1 hour ago', read: false, type: 'success' }
   ];
-
-  function initializeStorage() {
-    if (!localStorage.getItem(TASKS_KEY)) {
-      localStorage.setItem(TASKS_KEY, JSON.stringify(defaultTasks));
-    }
-    if (!localStorage.getItem(SETTINGS_KEY)) {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(defaultSettings));
-    }
-    if (!localStorage.getItem(NOTIFS_KEY)) {
-      localStorage.setItem(NOTIFS_KEY, JSON.stringify(defaultNotifications));
-    }
-  }
-
-  initializeStorage();
 
   const DataManager = {
     getTasks() {
+      const key = getTasksStorageKey();
       try {
-        return JSON.parse(localStorage.getItem(TASKS_KEY)) || defaultTasks;
+        const stored = localStorage.getItem(key);
+        if (stored !== null) return JSON.parse(stored);
+        
+        const initialTasks = [];
+        localStorage.setItem(key, JSON.stringify(initialTasks));
+        return initialTasks;
       } catch (e) {
-        return defaultTasks;
+        return [];
       }
     },
 
     saveTasks(tasks) {
-      localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
+      localStorage.setItem(getTasksStorageKey(), JSON.stringify(tasks));
     },
 
     addTask(taskData) {
@@ -191,8 +187,12 @@
     },
 
     getSettings() {
+      const key = getSettingsStorageKey();
       try {
-        return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || defaultSettings;
+        const stored = localStorage.getItem(key);
+        if (stored) return JSON.parse(stored);
+        localStorage.setItem(key, JSON.stringify(defaultSettings));
+        return defaultSettings;
       } catch (e) {
         return defaultSettings;
       }
@@ -218,20 +218,24 @@
 
     updateSettings(updatedFields) {
       const settings = { ...this.getSettings(), ...updatedFields };
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      localStorage.setItem(getSettingsStorageKey(), JSON.stringify(settings));
       return settings;
     },
 
     getNotifications() {
+      const key = getNotifsStorageKey();
       try {
-        return JSON.parse(localStorage.getItem(NOTIFS_KEY)) || defaultNotifications;
+        const stored = localStorage.getItem(key);
+        if (stored) return JSON.parse(stored);
+        localStorage.setItem(key, JSON.stringify(defaultNotifications));
+        return defaultNotifications;
       } catch (e) {
         return defaultNotifications;
       }
     },
 
     saveNotifications(notifs) {
-      localStorage.setItem(NOTIFS_KEY, JSON.stringify(notifs));
+      localStorage.setItem(getNotifsStorageKey(), JSON.stringify(notifs));
     },
 
     addNotification(title, message, type = 'info') {
@@ -281,3 +285,5 @@
 
   window.DataManager = DataManager;
 })();
+
+
